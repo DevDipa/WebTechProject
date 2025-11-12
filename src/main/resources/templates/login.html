@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Login - Student Attendance Tracker</title>
+    <style>
+        :root{--purple:#6b46c1;--muted:#6b7280}
+        body{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; background:#f3f4f6;}
+        .card{width:420px;max-width:92%;margin:56px auto;background:#fff;border-radius:12px;padding:28px;box-shadow:0 6px 18px rgba(15,23,42,0.08)}
+        h1{color:var(--purple);font-size:24px;margin:0 0 6px}
+        .subtitle{color:var(--muted);margin-bottom:16px}
+        .tabs{display:flex;gap:8px;margin:12px 0 18px}
+        .tab{flex:1;padding:10px;border-radius:8px;background:#f1f5f9;text-align:center;color:#111}
+        .tab.active{background:#fff;box-shadow:inset 0 -2px 0 rgba(107,70,193,0.06)}
+        label{display:block;margin-top:10px;color:#374151;font-size:13px}
+        input[type=text],input[type=password]{width:100%;padding:12px;border:1px solid #e6e9ef;border-radius:8px;margin-top:6px}
+        .btn{display:block;background:var(--purple);color:white;padding:12px;border-radius:8px;border:none;margin-top:18px;width:100%;font-weight:600}
+        .muted{color:var(--muted);font-size:13px;margin-top:12px;text-align:center}
+        .msg{color:#b91c1c;margin-bottom:8px}
+        .success{color:#047857;margin-bottom:8px}
+        a{color:var(--purple);text-decoration:none}
+    </style>
+    <script>
+        function validateLogin(e){
+            var u=document.getElementById('username').value.trim();
+            var p=document.getElementById('password').value.trim();
+            if(!u||!p){
+                e.preventDefault();
+                var el=document.getElementById('clientError');
+                el.textContent='Please enter both username and password.';
+                return false;
+            }
+            return true;
+        }
+    </script>
+</head>
+<body>
+<div class="card">
+    <h1>Student Attendance Tracker</h1>
+    <div class="subtitle">Login to access your account</div>
+
+    <div th:if="${param.error}" class="msg">Invalid username or password.</div>
+    <div th:if="${param.logout}" class="success">You have been logged out.</div>
+    <div th:if="${successMessage}" class="success" th:text="${successMessage}"></div>
+    <div id="clientError" class="msg" style="min-height:18px"></div>
+
+    <form th:action="@{/login}" method="post" onsubmit="return validateLogin(event)">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" placeholder="admin username" required autofocus />
+
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" placeholder="********" required />
+
+        <button class="btn" type="submit">Login</button>
+    </form>
+
+    <p style="text-align:center;margin-top:10px"><a th:href="@{/register}">Create an account</a></p>
+</div>
+</body>
+</html>
