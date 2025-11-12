@@ -58,7 +58,22 @@ public class RegistrationController {
         userRepository.save(user);
 
         model.addAttribute("successMessage", "Registration successful. You can now log in.");
-        return "login"; // redirect to login view (shows success)
+        // Return the login view so the user can sign in after registering.
+        // Note: we also expose a GET /login mapping below so Spring will render the
+        // Thymeleaf login template instead of triggering a redirect loop.
+        return "login";
+    }
+
+    @GetMapping("/login")
+    public String showLoginPage(Model model, @org.springframework.web.bind.annotation.RequestParam(value = "error", required = false) String error,
+                                @org.springframework.web.bind.annotation.RequestParam(value = "logout", required = false) String logout) {
+        if (error != null) {
+            model.addAttribute("error", true);
+        }
+        if (logout != null) {
+            model.addAttribute("logout", true);
+        }
+        return "login";
     }
 
     // Simple DTO for the form
