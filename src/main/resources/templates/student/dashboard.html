@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8" />
+    <title>Student Dashboard</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+        body { margin:0; font-family: Arial, sans-serif; background:#f3f4f6 }
+        .container { display:flex; min-height:100vh }
+        .sidebar { width:220px; background:linear-gradient(180deg,#6b46c1,#6b46c1); color:white; padding:20px }
+        .sidebar .brand { font-size:20px; font-weight:700; margin-bottom:18px }
+        .nav { display:flex; flex-direction:column; gap:8px }
+        .nav a { display:block; padding:10px 12px; color:#cbd5e1; text-decoration:none; border-radius:6px }
+        .nav a.active { background:#C8A9F5; color:#fff }
+        .nav a:hover { background:#A57DE9; color:#fff }
+        .content { flex:1; padding:28px }
+        .card { background:white; border-radius:8px; padding:20px; box-shadow: 0 2px 6px rgba(0,0,0,0.06) }
+        .stats { display:flex; gap:16px; flex-wrap:wrap; margin-top:16px }
+        .stat { min-width:160px; flex:1 1 160px; }
+        .muted { color:#64748b }
+    </style>
+</head>
+<body>
+<div class="container">
+    <aside class="sidebar">
+        <div class="brand">SATracker — Student</div>
+        <nav class="nav">
+            <a th:classappend="${active}=='dashboard'? ' active' : ''" th:href="@{/student/dashboard}">Dashboard</a>
+            <a th:classappend="${active}=='performance'? ' active' : ''" th:href="@{/student/performance}">Performance</a>
+            <a th:href="@{/logout}">Log Out</a>
+        </nav>
+    </aside>
+    <main class="content">
+        <div class="card">
+            <h2 th:text="'Welcome, ' + ${studentName}">Welcome</h2>
+            <p id="summarySubtitle" class="muted">Monthly summary</p>
+        </div>
+
+        <div class="stats">
+            <div class="card stat">
+                <h3>Total Present</h3>
+                <div id="present" style="font-size:28px; font-weight:700">0</div>
+            </div>
+            <div class="card stat">
+                <h3>Total Absent</h3>
+                <div id="absent" style="font-size:28px; font-weight:700">0</div>
+            </div>
+            <div class="card stat">
+                <h3>Total Late</h3>
+                <div id="late" style="font-size:28px; font-weight:700">0</div>
+            </div>
+            <div class="card stat">
+                <h3>Average</h3>
+                <div id="average" style="font-size:28px; font-weight:700">0%</div>
+            </div>
+        </div>
+
+        <script>
+            async function loadSummary(){
+                try{
+                    const res = await fetch('/student/api/summary');
+                    if(!res.ok) return;
+                    const d = await res.json();
+                    document.getElementById('present').textContent = d.present ?? 0;
+                    document.getElementById('absent').textContent = d.absent ?? 0;
+                    document.getElementById('late').textContent = d.late ?? 0;
+                    document.getElementById('average').textContent = (d.average ?? 0) + '%';
+                    const sub = document.getElementById('summarySubtitle');
+                    if(d.month && d.year){ sub.textContent = `Summary for ${d.month} ${d.year}`; }
+                }catch(e){ console.error(e); }
+            }
+            loadSummary();
+        </script>
+    </main>
+</div>
+</body>
+</html>
