@@ -1,117 +1,158 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <title>Teacher Attendance</title>
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance Management</title>
     <style>
-        body { margin:0; font-family: Arial, sans-serif; background:#f3f4f6 }
-        .container { display:flex; min-height:100vh }
-        .sidebar { width:220px; background:linear-gradient(180deg,#6b46c1); color:white; padding:20px }
-        .sidebar .brand { font-size:18px; font-weight:700; margin-bottom:12px }
-        .nav { display:flex; flex-direction:column; gap:8px }
-        .nav a { display:block; padding:10px 12px; color:#cbd5e1; text-decoration:none; border-radius:6px }
-        .nav a.active { background:#C8A9F5; color:#fff }
-        .nav a:hover { background:#A57DE9; color:#fff }
-        .content { flex:1; padding:24px }
-        .card { background:white; border-radius:8px; padding:20px; box-shadow: 0 2px 6px rgba(0,0,0,0.06) }
-        .student-row { display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid #f1f5f9 }
-        .controls { display:flex; gap:8px }
+        body { font-family: Arial, sans-serif; margin: 0; background: #f8fafc; color:#111827 }
+        .container { max-width: 1100px; margin: 0 auto; padding: 20px }
+        .toolbar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; padding: 12px 0 }
+        .left-controls { display:flex; gap:10px; align-items:center }
+        .right-controls { display:flex; gap:10px; align-items:center }
+        select, input[type=date] { padding:8px; border:1px solid #e5e7eb; border-radius:6px; background:#fff }
+        button { padding:8px 12px; border:1px solid #e5e7eb; border-radius:6px; background:#fff; cursor:pointer }
+        h1 { margin:0; font-size:22px }
+        #message { min-height: 20px; font-weight:600; }
+        .panel { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.03) }
+        #markAll { background:#16a34a; border-color:#16a34a; color:#fff }
+        #markAll:hover { background:#15803d; border-color:#15803d }
+        #saveBtn { background:#6d28d9; border-color:#6d28d9; color:#fff }
+        #saveBtn:hover { background:#5b21b6; border-color:#5b21b6 }
+        thead th { color:#6b7280; font-size:12px; letter-spacing:0.02em; text-transform:uppercase }
     </style>
+    
 </head>
 <body>
-<div class="container">
-    <aside class="sidebar">
-        <div class="brand">SATracker — Teacher</div>
-        
-         <nav class="nav">
-            <a th:classappend="${active}=='dashboard'? ' active' : ''" th:href="@{/teacher/dashboard}">Dashboard</a>
-            <a th:classappend="${active}=='batches'? ' active' : ''" th:href="@{/teacher/attendance}">Attendance</a>
-            <a th:href="@{/logout}">Log Out</a>
-        </nav>
-    </aside>
-    <main class="content">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px">
-            <h2>Attendance</h2>
-            <div style="display:flex; gap:8px; align-items:center">
-                <input id="datePicker" type="date" />
-                <button id="checkBtn" style="padding:8px 12px;">Load</button>
-                <button id="saveBtn" style="padding:8px 12px; background:#10b981; color:white; border:none; border-radius:6px">Save</button>
+    <div class="container">
+        <div class="toolbar">
+            <div class="left-controls">
+                <h1>Attendance Management</h1>
+                <label for="classSelect">Class</label>
+                <select id="classSelect" disabled>
+                    <option>Loading...</option>
+                </select>
+                <label for="datePicker">Date</label>
+                <input type="date" id="datePicker" />
+            </div>
+            <div class="right-controls">
+                <button id="markAll">Mark All Present</button>
+                <button id="saveBtn">Save</button>
+                <button id="viewRecords">View Records</button>
             </div>
         </div>
-
-        <div id="message" style="color:#b91c1c; margin-bottom:8px"></div>
-
-        <div id="listCard" class="card">
-            <div style="font-weight:700; color:#6b7280; padding-bottom:8px">Students</div>
+        <div id="message"></div>
+        <div class="panel">
             <div id="studentsList"></div>
         </div>
-    </main>
-</div>
-
-<script>
-    document.getElementById('btnDashboard').addEventListener('click', ()=> window.location='/teacher/dashboard');
-
+    </div>
+    <script>
     let students = [];
+
+    // helper to safely get element
+    function $id(id){ return document.getElementById(id); }
 
     async function loadStudents(){
         try{
+            // first load the teacher's assigned batch and populate the Class select
+            const bRes = await fetch('/teacher/api/batch', { credentials: 'same-origin' });
+            if(bRes.ok){
+                const batch = await bRes.json();
+                const sel = $id('classSelect'); sel.innerHTML = '';
+                if(batch && batch.id){
+                    const opt = document.createElement('option'); opt.value = batch.id; opt.textContent = `${batch.batchName} (${batch.year||''})`;
+                    sel.appendChild(opt);
+                    sel.disabled = true; // teacher has single assigned batch
+                } else {
+                    const opt = document.createElement('option'); opt.value=''; opt.textContent='-- None --'; sel.appendChild(opt);
+                    sel.disabled = true;
+                }
+            }
+
             const res = await fetch('/teacher/api/students', { credentials: 'same-origin' });
-            if(!res.ok) throw new Error('failed');
-            students = await res.json();
-            renderStudents([]);
+            if(!res.ok){
+                const txt = await res.text().catch(()=> '');
+                console.error('Students fetch failed', res.status, txt);
+                throw new Error(`Students fetch failed: ${res.status}`);
+            }
+            students = await res.json() || [];
+            if(!Array.isArray(students)) students = [];
+            renderStudents();
+        }catch(e){
+            console.error('loadStudents error:', e);
+            $id('studentsList').innerHTML = '<div style="padding:12px;color:#b91c1c">Unable to load students. Please refresh. If this persists, check server logs for /teacher/api/students.</div>';
+        }
+    }
+
+    function escapeHtml(text){ if(!text) return ''; return text.replace(/[&<>"']/g, s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[s])); }
+
+    // mark all present
+    $id('markAll').addEventListener('click', ()=>{
+        (students||[]).forEach(s=> setStatus(s.id,'PRESENT'));
+    });
+
+    // wire date change (no prev/next arrows)
+    $id('datePicker').addEventListener('change', onDateChange);
+
+    // view records -> navigate to records page
+    $id('viewRecords').addEventListener('click', ()=>{ window.location = '/teacher/records'; });
+
+    async function onDateChange(){
+        const d = $id('datePicker').value;
+        if(!d) return;
+        const res = await fetch(`/teacher/api/isHoliday?date=${d}`, { credentials: 'same-origin' });
+        if(!res.ok) return;
+        const info = await res.json();
+        const msg = $id('message');
+        if(info.isFuture){ msg.style.color='#b91c1c'; msg.textContent='Cannot mark attendance for future dates.'; disableControls(true); return; }
+        if(info.isSaturday){ msg.style.color='#b91c1c'; msg.textContent='Saturdays are holidays; marking disabled.'; disableControls(true); return; }
+        if(info.isHoliday){ msg.style.color='#b91c1c'; msg.textContent='This date is a registered holiday; marking disabled.'; disableControls(true); return; }
+        msg.textContent = '';
+        disableControls(false);
+
+        // try to fetch existing attendance for this date and populate controls
+        try{
+            const recRes = await fetch(`/teacher/api/records/${d}`, { credentials: 'same-origin' });
+            if(recRes.ok){
+                const recs = await recRes.json();
+                // recs expected to be array of { studentId, status, remarks } or similar
+                const byId = {};
+                (recs||[]).forEach(r=>{
+                    if(r.studentId) byId[r.studentId] = r;
+                });
+                // apply
+                students.forEach(s=>{
+                    const r = byId[s.id];
+                    if(r){ setStatus(s.id, (r.status||'ABSENT').toUpperCase()); $id('remarks-'+s.id).value = r.remarks || '' }
+                    else { setStatus(s.id,'ABSENT'); $id('remarks-'+s.id).value = '' }
+                });
+            } else {
+                // no existing records -> default to ABSENT
+                students.forEach(s=>{ setStatus(s.id,'ABSENT'); $id('remarks-'+s.id).value = '' });
+            }
         }catch(e){ console.error(e); }
     }
 
-    function renderStudents(records){
-        const list = document.getElementById('studentsList');
-        list.innerHTML = '';
-        (students||[]).forEach(s=>{
-            const div = document.createElement('div'); div.className='student-row';
-            const left = document.createElement('div'); left.innerHTML = `<div style="font-weight:700">${escapeHtml(s.user? s.user.fullName : '')}</div><div style="color:#6b7280; font-size:13px">ID: ${s.id}</div>`;
-            const controls = document.createElement('div'); controls.className='controls';
-            const pBtn = document.createElement('button'); pBtn.textContent='Present';
-            const aBtn = document.createElement('button'); aBtn.textContent='Absent';
-            const lBtn = document.createElement('button'); lBtn.textContent='Late';
-            [pBtn,aBtn,lBtn].forEach(b=>{ b.style.padding='6px 10px'; b.style.borderRadius='6px'; b.style.border='1px solid #ddd'; b.addEventListener('click', ()=> setStatus(s.id, b.textContent.toUpperCase())); });
-            const statusLabel = document.createElement('div'); statusLabel.id = 'status-'+s.id; statusLabel.style.minWidth='90px'; statusLabel.style.textAlign='center'; statusLabel.textContent='—';
-            controls.appendChild(pBtn); controls.appendChild(aBtn); controls.appendChild(lBtn); controls.appendChild(statusLabel);
-            div.appendChild(left); div.appendChild(controls);
-            list.appendChild(div);
-        });
+    function disableControls(disabled){
+        document.querySelectorAll('#studentsTable input, #studentsTable button, #studentsTable textarea').forEach(b=> b.disabled = disabled);
+        $id('saveBtn').disabled = disabled;
+        $id('markAll').disabled = disabled;
     }
 
-    function setStatus(studentId, status){
-        const el = document.getElementById('status-'+studentId);
-        if(el) el.textContent = status;
-    }
-
-    function escapeHtml(text){ if(!text) return ''; return text.replace(/[&<>\"']/g, s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[s])); }
-
-    document.getElementById('checkBtn').addEventListener('click', async ()=>{
-        const d = document.getElementById('datePicker').value;
-        if(!d) return alert('Pick a date');
-        // check holiday/saturday/future
-        const res = await fetch(`/teacher/api/isHoliday?date=${d}`, { credentials: 'same-origin' });
-        const info = await res.json();
-        const msg = document.getElementById('message');
-        if(info.isFuture){ msg.textContent='Cannot mark attendance for future dates.'; return; }
-        if(info.isSaturday){ msg.textContent='Saturdays are holidays; marking disabled.'; return; }
-        if(info.isHoliday){ msg.textContent='This date is a registered holiday; marking disabled.'; return; }
-        msg.textContent = '';
-        // load existing attendance for this date (optional) - backend saves/updates on Save
-        renderStudents([]);
-    });
-
-    document.getElementById('saveBtn').addEventListener('click', async ()=>{
+    $id('saveBtn').addEventListener('click', async ()=>{
         const d = document.getElementById('datePicker').value;
         if(!d) return alert('Pick a date');
         const resInfo = await fetch(`/teacher/api/isHoliday?date=${d}`, { credentials: 'same-origin' });
         const info = await resInfo.json();
-        const msg = document.getElementById('message');
-        if(info.isFuture || info.isSaturday || info.isHoliday){ msg.textContent='Selected date is not allowed for marking.'; return; }
-        // build records
-        const records = students.map(s=>({ studentId: s.id, status: (document.getElementById('status-'+s.id)?.textContent || 'ABSENT') }));
+        const msg = $id('message');
+        if(info.isFuture || info.isSaturday || info.isHoliday){ msg.style.color='#b91c1c'; msg.textContent='Selected date is not allowed for marking.'; return; }
+        // build records (include remarks) - read hidden status inputs
+        const records = students.map(s=>{
+            const statusEl = document.getElementById(`statusVal-${s.id}`);
+            const status = (statusEl?.value || 'ABSENT').toUpperCase();
+            const remarks = $id('remarks-'+s.id)?.value || '';
+            return { studentId: s.id, status, remarks };
+        });
         try{
             const res = await fetch('/teacher/api/attendance', { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ date: d, records }) });
             const data = await res.json();
@@ -120,7 +161,80 @@
         }catch(e){ console.error(e); msg.textContent='Save failed'; }
     });
 
+    // set visual selected state on buttons + label
+    function setStatus(studentId, status){
+        const val = (status||'ABSENT').toUpperCase();
+        // update label
+        const lbl = $id('status-'+studentId);
+        if(lbl) lbl.textContent = val;
+        // persist value for saving
+        const statusHidden = document.getElementById(`statusVal-${studentId}`);
+        if(statusHidden) statusHidden.value = val;
+        // update button styles
+        const btns = document.querySelectorAll(`#row-${studentId} button.status-btn`);
+        btns.forEach(b=>{
+            if(b.textContent.toUpperCase() === (val==='PRESENT'?'PRESENT':val)){
+                b.style.background = '#4f46e5';
+                b.style.color = '#fff';
+                b.style.borderColor = '#4f46e5';
+            } else {
+                b.style.background = '';
+                b.style.color = '';
+                b.style.borderColor = '#e5e7eb';
+            }
+        });
+    }
+
+    // render students into a visible table with button-based status and remarks
+    function renderStudents(){
+        const container = document.getElementById('studentsList');
+        container.innerHTML = '';
+        if(!students || students.length === 0){
+            container.innerHTML = '<div style="padding:12px;color:#6b7280">No students found for this class.</div>';
+            return;
+        }
+        const table = document.createElement('table'); table.id = 'studentsTable'; table.style.width='100%'; table.style.borderCollapse='collapse';
+        const thead = document.createElement('thead'); thead.innerHTML = `
+            <tr style="text-align:left; border-bottom:1px solid #e6edf3; color:#6b7280">
+                <th style="width:160px; padding:10px">ROLL NO.</th>
+                <th style="padding:10px">NAME</th>
+                <th style="width:320px; padding:10px">STATUS</th>
+                <th style="width:220px; padding:10px">REMARKS</th>
+            </tr>`;
+        table.appendChild(thead);
+        const tbody = document.createElement('tbody');
+        students.forEach(s=>{
+            const tr = document.createElement('tr'); tr.id = `row-${s.id}`; tr.style.borderBottom = '1px solid #f1f5f9';
+            const tdId = document.createElement('td'); tdId.style.padding='10px'; tdId.innerHTML = `<div style="font-weight:700">${s.id}</div>`;
+            const tdName = document.createElement('td'); tdName.style.padding='10px'; tdName.innerHTML = `<div style="font-weight:700">${escapeHtml(s.user? s.user.fullName : '')}</div><div style="color:#6b7280; font-size:13px">${escapeHtml(s.user? s.user.username : '')}</div>`;
+            const tdStatus = document.createElement('td'); tdStatus.style.padding='10px'; tdStatus.style.textAlign='left';
+            const statusDiv = document.createElement('div'); statusDiv.style.display='flex'; statusDiv.style.alignItems='center'; statusDiv.style.gap='8px';
+            const statusLabel = document.createElement('div'); statusLabel.id = 'status-'+s.id; statusLabel.style.minWidth='90px'; statusLabel.style.textAlign='center'; statusLabel.textContent='—';
+            const presentBtn = document.createElement('button'); presentBtn.textContent='Present'; presentBtn.className='status-btn';
+            const absentBtn = document.createElement('button'); absentBtn.textContent='Absent'; absentBtn.className='status-btn';
+            const lateBtn = document.createElement('button'); lateBtn.textContent='Late'; lateBtn.className='status-btn';
+            ;[presentBtn, absentBtn, lateBtn].forEach(b=>{ b.style.padding='6px 10px'; b.style.borderRadius='6px'; b.style.border='1px solid #e5e7eb'; b.addEventListener('click', ()=> setStatus(s.id, b.textContent.toUpperCase())); });
+            // hidden input to persist status value
+            const hidden = document.createElement('input'); hidden.type='hidden'; hidden.id = `statusVal-${s.id}`; hidden.value='ABSENT';
+            statusDiv.appendChild(statusLabel);
+            statusDiv.appendChild(presentBtn);
+            statusDiv.appendChild(absentBtn);
+            statusDiv.appendChild(lateBtn);
+            statusDiv.appendChild(hidden);
+            tdStatus.appendChild(statusDiv);
+
+            const tdRemarks = document.createElement('td'); tdRemarks.style.padding='10px';
+            const remarks = document.createElement('input'); remarks.type='text'; remarks.id = 'remarks-'+s.id; remarks.placeholder='Remarks (optional)'; remarks.style.padding='8px'; remarks.style.borderRadius='6px'; remarks.style.border='1px solid #e5e7eb'; remarks.style.width='100%';
+            tdRemarks.appendChild(remarks);
+
+            tr.appendChild(tdId); tr.appendChild(tdName); tr.appendChild(tdStatus); tr.appendChild(tdRemarks);
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        container.appendChild(table);
+    }
+
     loadStudents();
-</script>
+    </script>
 </body>
 </html>

@@ -56,7 +56,8 @@
 </div>
 
 <script>
-    document.getElementById('btnAttendance').addEventListener('click', ()=> window.location='/teacher/attendance');
+    const goAttend = document.getElementById('btnAttendance');
+    if(goAttend) goAttend.addEventListener('click', ()=> window.location='/teacher/attendance');
 
     async function loadSummary(){
         try{

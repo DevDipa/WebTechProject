@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8" />
+    <title>Attendance Detail</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+        body{font-family:Arial, sans-serif; background:#f3f4f6}
+        .card{background:white;border-radius:8px;padding:20px;margin:20px}
+        table{width:100%;border-collapse:collapse}
+        th,td{padding:10px;border-bottom:1px solid #eef}
+        th.name, td.name { text-align:left; }
+        th.center, td.center { text-align:center; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h2>Attendance for <span id="dateSpan">...</span></h2>
+    <div id="list">Loading...</div>
+    <p><a href="/teacher/records">Back to records</a></p>
+</div>
+<script>
+    const date = window.location.pathname.split('/').pop();
+    document.getElementById('dateSpan').textContent = date;
+    async function load(){
+        const res = await fetch(`/teacher/api/records/${date}`, { credentials:'same-origin' });
+        if(!res.ok) return document.getElementById('list').textContent = 'Failed to load';
+        const rows = await res.json();
+        if(!rows || rows.length===0) return document.getElementById('list').textContent='No records for this date';
+        let html = '<table><thead><tr><th class="name">Student</th><th class="center">Status</th><th class="name">Remarks</th></tr></thead><tbody>';
+        rows.forEach(r=>{
+            html += `<tr><td class="name">${r.name}</td><td class="center">${r.status}</td><td class="name">${r.remarks||''}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        document.getElementById('list').innerHTML = html;
+    }
+    load();
+</script>
+</body>
+</html>

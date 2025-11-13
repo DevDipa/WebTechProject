@@ -3,6 +3,7 @@ package com.TheTrio.SATracker.controller;
 import com.TheTrio.SATracker.models.Attendance;
 import com.TheTrio.SATracker.models.AttendanceStatus;
 import com.TheTrio.SATracker.models.Student;
+import com.TheTrio.SATracker.models.Batch;
 import com.TheTrio.SATracker.models.Teacher;
 import com.TheTrio.SATracker.repository.AttendanceRepository;
 import com.TheTrio.SATracker.repository.HolidayRepository;
@@ -86,14 +87,43 @@ public class TeacherController {
 
     @GetMapping("/teacher/api/students")
     @ResponseBody
-    public List<Student> studentsForTeacher(Authentication auth){
+    public List<Map<String,Object>> studentsForTeacher(Authentication auth){
         String username = auth.getName();
         Optional<Teacher> opt = teacherRepository.findByUser_Username(username);
         if(opt.isEmpty()) return List.of();
         Teacher t = opt.get();
         Integer batchId = t.getBatch()!=null? t.getBatch().getId() : null;
         if(batchId==null) return List.of();
-        return studentRepository.findByBatch_Id(batchId);
+        List<Student> list = studentRepository.findByBatch_Id(batchId);
+        List<Map<String,Object>> out = new ArrayList<>();
+        for(Student s : list){
+            Map<String,Object> m = new HashMap<>();
+            m.put("id", s.getId());
+            Map<String,Object> u = new HashMap<>();
+            if(s.getUser()!=null){
+                u.put("fullName", s.getUser().getFullName());
+                u.put("username", s.getUser().getUsername());
+            }
+            m.put("user", u);
+            out.add(m);
+        }
+        return out;
+    }
+
+    @GetMapping("/teacher/api/batch")
+    @ResponseBody
+    public Map<String,Object> batchForTeacher(Authentication auth){
+        String username = auth.getName();
+        Optional<Teacher> opt = teacherRepository.findByUser_Username(username);
+        if(opt.isEmpty()) return Map.of();
+        Teacher t = opt.get();
+        Batch b = t.getBatch();
+        if(b==null) return Map.of();
+        Map<String,Object> m = new HashMap<>();
+        m.put("id", b.getId());
+        m.put("batchName", b.getBatchName());
+        m.put("year", b.getYear());
+        return m;
     }
 
     @PostMapping("/teacher/api/attendance")
@@ -122,11 +152,13 @@ public class TeacherController {
             Integer studentId = (Integer) (r.get("studentId") instanceof Integer? r.get("studentId") : ((Number)r.get("studentId")).intValue());
             String statusStr = (String) r.get("status");
             AttendanceStatus status = AttendanceStatus.valueOf(statusStr);
+            String remarks = r.get("remarks")!=null? String.valueOf(r.get("remarks")) : null;
             Optional<com.TheTrio.SATracker.models.Attendance> existing = attendanceRepository.findByStudent_IdAndDate(studentId, date);
             com.TheTrio.SATracker.models.Attendance a;
-            if(existing.isPresent()){
+                if(existing.isPresent()){
                 a = existing.get();
                 a.setStatus(status);
+                a.setRemarks(remarks);
             } else {
                 a = new com.TheTrio.SATracker.models.Attendance();
                 Student s = studentRepository.findById(studentId).orElse(null);
@@ -134,6 +166,7 @@ public class TeacherController {
                 a.setStudent(s);
                 a.setDate(date);
                 a.setStatus(status);
+                a.setRemarks(remarks);
             }
             attendanceRepository.save(a);
             saved++;
@@ -148,5 +181,88 @@ public class TeacherController {
         boolean saturday = date.getDayOfWeek()== DayOfWeek.SATURDAY;
         boolean future = date.isAfter(LocalDate.now());
         return Map.of("isHoliday", h, "isSaturday", saturday, "isFuture", future);
+    }
+
+    // Attendance history aggregation for teacher's batch
+    @GetMapping("/teacher/api/records")
+    @ResponseBody
+    public List<Map<String,Object>> records(Authentication auth){
+        String username = auth.getName();
+        Optional<Teacher> opt = teacherRepository.findByUser_Username(username);
+        if(opt.isEmpty()) return List.of();
+        Teacher t = opt.get();
+        Integer batchId = t.getBatch()!=null? t.getBatch().getId() : null;
+        if(batchId==null) return List.of();
+        List<Student> students = studentRepository.findByBatch_Id(batchId);
+        List<Integer> ids = students.stream().map(Student::getId).collect(Collectors.toList());
+        if(ids.isEmpty()) return List.of();
+        List<com.TheTrio.SATracker.models.Attendance> all = attendanceRepository.findByStudent_IdIn(ids);
+        // group by date
+        Map<LocalDate, List<com.TheTrio.SATracker.models.Attendance>> grouped = all.stream().collect(Collectors.groupingBy(com.TheTrio.SATracker.models.Attendance::getDate));
+        List<Map<String,Object>> out = new ArrayList<>();
+        grouped.forEach((date, list)->{
+            long present = list.stream().filter(a->a.getStatus()==AttendanceStatus.PRESENT).count();
+            long late = list.stream().filter(a->a.getStatus()==AttendanceStatus.LATE).count();
+            long absent = list.stream().filter(a->a.getStatus()==AttendanceStatus.ABSENT).count();
+            Map<String,Object> m = new HashMap<>();
+            m.put("date", date.toString());
+            m.put("total", list.size());
+            m.put("present", present);
+            m.put("late", late);
+            m.put("absent", absent);
+            out.add(m);
+        });
+        // sort by date desc
+        out.sort((a,b)-> ((String)b.get("date")).compareTo((String)a.get("date")));
+        return out;
+    }
+
+    @GetMapping("/teacher/api/records/{date}")
+    @ResponseBody
+    public List<Map<String,Object>> recordsForDate(Authentication auth, @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date){
+        String username = auth.getName();
+        Optional<Teacher> opt = teacherRepository.findByUser_Username(username);
+        if(opt.isEmpty()) return List.of();
+        Teacher t = opt.get();
+        Integer batchId = t.getBatch()!=null? t.getBatch().getId() : null;
+        if(batchId==null) return List.of();
+        List<Student> students = studentRepository.findByBatch_Id(batchId);
+        List<Integer> ids = students.stream().map(Student::getId).collect(Collectors.toList());
+        if(ids.isEmpty()) return List.of();
+        List<com.TheTrio.SATracker.models.Attendance> list = attendanceRepository.findByDateAndStudent_IdIn(date, ids);
+        List<Map<String,Object>> out = new ArrayList<>();
+        for(com.TheTrio.SATracker.models.Attendance a: list){
+            Map<String,Object> m = new HashMap<>();
+            Student s = a.getStudent();
+            m.put("studentId", s.getId());
+            m.put("name", s.getUser()!=null? s.getUser().getFullName() : "");
+            m.put("status", a.getStatus().name());
+            m.put("remarks", a.getRemarks());
+            out.add(m);
+        }
+        return out;
+    }
+
+    @GetMapping("/teacher/records")
+    public String recordsPage(Authentication auth, Model model){
+        String username = auth.getName();
+        Optional<Teacher> opt = teacherRepository.findByUser_Username(username);
+        if(opt.isEmpty()) return "redirect:/login";
+        Teacher t = opt.get();
+        model.addAttribute("active","records");
+        model.addAttribute("teacherName", t.getUser()!=null? t.getUser().getFullName(): username);
+        return "teacher/records";
+    }
+
+    @GetMapping("/teacher/records/{date}")
+    public String recordsDetailPage(Authentication auth, @PathVariable String date, Model model){
+        String username = auth.getName();
+        Optional<Teacher> opt = teacherRepository.findByUser_Username(username);
+        if(opt.isEmpty()) return "redirect:/login";
+        Teacher t = opt.get();
+        model.addAttribute("active","records");
+        model.addAttribute("teacherName", t.getUser()!=null? t.getUser().getFullName(): username);
+        model.addAttribute("date", date);
+        return "teacher/records-detail";
     }
 }

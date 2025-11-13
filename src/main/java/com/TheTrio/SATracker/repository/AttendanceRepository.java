@@ -14,4 +14,5 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Integer>
 
     List<Attendance> findByDateAndStudent_IdIn(LocalDate date, List<Integer> studentIds);
     Optional<Attendance> findByStudent_IdAndDate(Integer studentId, LocalDate date);
+	List<Attendance> findByStudent_IdIn(List<Integer> studentIds);
 }

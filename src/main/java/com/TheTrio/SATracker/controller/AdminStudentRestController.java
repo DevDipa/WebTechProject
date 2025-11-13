@@ -44,8 +44,36 @@ public class AdminStudentRestController {
     }
 
     @GetMapping
-    public List<Student> list(){
-        return studentRepository.findAll();
+    public List<java.util.Map<String,Object>> list(){
+        List<Student> all = studentRepository.findAll();
+        List<java.util.Map<String,Object>> out = new java.util.ArrayList<>();
+        for(Student s : all){
+            java.util.Map<String,Object> m = new java.util.HashMap<>();
+            m.put("id", s.getId());
+            // user summary
+            java.util.Map<String,Object> u = new java.util.HashMap<>();
+            if(s.getUser()!=null){
+                u.put("username", s.getUser().getUsername());
+                u.put("fullName", s.getUser().getFullName());
+                u.put("email", s.getUser().getEmail());
+            }
+            m.put("user", u);
+            // batch summary
+            java.util.Map<String,Object> b = new java.util.HashMap<>();
+            if(s.getBatch()!=null){
+                b.put("id", s.getBatch().getId());
+                b.put("batchName", s.getBatch().getBatchName());
+                b.put("year", s.getBatch().getYear());
+            }
+            m.put("batch", b);
+            // other fields
+            m.put("dob", s.getDob()!=null? s.getDob().toString(): null);
+            m.put("phone", s.getPhone());
+            m.put("address", s.getAddress());
+            m.put("bloodGroup", s.getBloodGroup());
+            out.add(m);
+        }
+        return out;
     }
 
     // DTO expected: { username, password, fullName, email, dob, phone, address, bloodGroup, batchId }
