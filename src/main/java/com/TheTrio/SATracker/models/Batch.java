@@ -2,6 +2,7 @@ package com.TheTrio.SATracker.models;
 
 import jakarta.persistence.*;
 import java.util.List;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "batches")
@@ -17,9 +18,11 @@ public class Batch {
     private Integer year;
 
     @OneToMany(mappedBy = "batch", cascade = CascadeType.ALL)
+    @JsonIgnore
     private List<Teacher> teachers;
 
     @OneToMany(mappedBy = "batch", cascade = CascadeType.ALL)
+    @JsonIgnore
     private List<Student> students;
 
     // ===== Getters and Setters =====

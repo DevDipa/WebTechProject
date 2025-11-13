@@ -65,8 +65,3 @@ public class Attendance {
         this.remarks = remarks;
     }
 }
-
-// ===== Enum for Attendance Status =====
-enum AttendanceStatus {
-    PRESENT, ABSENT, LATE
-}

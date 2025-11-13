@@ -7,12 +7,12 @@
     <style>
         body { margin:0; font-family: Arial, sans-serif; background:#f3f4f6 }
         .container { display:flex; min-height:100vh }
-        .sidebar { width:240px; background:linear-gradient(180deg,#0f172a,#0b1220); color:white; padding:24px }
+        .sidebar { width:240px; background:linear-gradient(180deg,#6b46c1); color:white; padding:24px }
         .sidebar .brand { font-size:20px; font-weight:700; margin-bottom:18px }
         .nav { display:flex; flex-direction:column; gap:8px }
         .nav a { display:block; padding:10px 12px; color:#cbd5e1; text-decoration:none; border-radius:6px }
-        .nav a.active { background:#1e293b; color:#fff }
-        .nav a:hover { background:#111827; color:#fff }
+        .nav a.active { background:#C8A9F5; color:#fff }
+        .nav a:hover { background:#A57DE9; color:#fff }
         .content { flex:1; padding:28px }
         .card { background:white; border-radius:8px; padding:20px; box-shadow: 0 2px 6px rgba(0,0,0,0.06) }
     </style>
@@ -31,10 +31,138 @@
         </nav>
     </aside>
     <main class="content">
-        <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px">
             <h2>Batches</h2>
-            <p>Batch management area (placeholder).</p>
+            <div>
+                <button id="addBtn" style="padding:8px 12px; background:#3b82f6; color:white; border:none; border-radius:6px; cursor:pointer">Add Batch</button>
+            </div>
         </div>
+
+        <div id="batchesGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px"></div>
+
+        <!-- modal -->
+        <div id="modal" style="position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,0.4)">
+            <div style="width:420px; background:white; border-radius:8px; padding:18px; box-shadow:0 6px 20px rgba(0,0,0,0.2)">
+                <h3 id="modalTitle">Add Batch</h3>
+                <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px">
+                    <label>Batch Name<input id="batchName" type="text" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px"/></label>
+                    <label>Year<input id="batchYear" type="number" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px"/></label>
+                </div>
+                <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px">
+                    <button id="cancelBtn" style="padding:8px 12px; border-radius:6px; border:1px solid #ddd; background:white">Cancel</button>
+                    <button id="saveBtn" style="padding:8px 12px; background:#10b981; color:white; border:none; border-radius:6px">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            let editingId = null;
+
+            async function loadBatches(){
+                try{
+                    const res = await fetch('/admin/api/batches');
+                    const data = await res.json();
+                    const grid = document.getElementById('batchesGrid');
+                    grid.innerHTML = '';
+                    data.forEach(b => {
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        card.innerHTML = `
+                            <div style="display:flex; justify-content:space-between; align-items:center">
+                                <div>
+                                    <div style="font-size:16px; font-weight:700">${escapeHtml(b.batchName)}</div>
+                                    <div style="color:#6b7280">Year: ${b.year || ''}</div>
+                                </div>
+                                <div style="display:flex; gap:6px">
+                                    <button data-id="${b.id}" class="editBtn" style="padding:6px 10px; background:#f59e0b; color:white; border:none; border-radius:6px">Edit</button>
+                                    <button data-id="${b.id}" class="delBtn" style="padding:6px 10px; background:#ef4444; color:white; border:none; border-radius:6px">Delete</button>
+                                </div>
+                            </div>`;
+                        grid.appendChild(card);
+                    });
+
+                    document.querySelectorAll('.editBtn').forEach(btn => btn.addEventListener('click', e=>{
+                        const id = e.currentTarget.getAttribute('data-id');
+                        openEdit(id);
+                    }));
+                    document.querySelectorAll('.delBtn').forEach(btn => btn.addEventListener('click', e=>{
+                        const id = e.currentTarget.getAttribute('data-id');
+                        deleteBatch(id);
+                    }));
+                }catch(e){console.error(e)}
+            }
+
+            function escapeHtml(text){
+                if(!text) return '';
+                return text.replace(/[&<>\"']/g, s=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;" }[s]));
+            }
+
+            function openModal(){
+                document.getElementById('modal').style.display='flex';
+            }
+            function closeModal(){
+                document.getElementById('modal').style.display='none';
+                editingId = null;
+                document.getElementById('batchName').value='';
+                document.getElementById('batchYear').value='';
+            }
+
+            document.getElementById('addBtn').addEventListener('click', ()=>{
+                editingId = null;
+                document.getElementById('modalTitle').textContent='Add Batch';
+                openModal();
+            });
+            document.getElementById('cancelBtn').addEventListener('click', closeModal);
+
+            document.getElementById('saveBtn').addEventListener('click', async ()=>{
+                const name = document.getElementById('batchName').value.trim();
+                const year = parseInt(document.getElementById('batchYear').value) || null;
+                if(!name){ alert('Batch name is required'); return; }
+                try{
+                    if(editingId){
+                        const res = await fetch('/admin/api/batches/'+editingId, {
+                            method:'PUT', headers:{'Content-Type':'application/json'},
+                            body: JSON.stringify({ batchName:name, year: year })
+                        });
+                        if(!res.ok) throw new Error('Update failed');
+                    }else{
+                        const res = await fetch('/admin/api/batches', {
+                            method:'POST', headers:{'Content-Type':'application/json'},
+                            body: JSON.stringify({ batchName:name, year: year })
+                        });
+                        if(!res.ok) throw new Error('Create failed');
+                    }
+                    closeModal();
+                    loadBatches();
+                }catch(e){ alert(e.message||'Failed'); }
+            });
+
+            async function openEdit(id){
+                try{
+                    const res = await fetch('/admin/api/batches');
+                    const data = await res.json();
+                    const b = data.find(x=>String(x.id)===String(id));
+                    if(!b) return alert('Batch not found');
+                    editingId = b.id;
+                    document.getElementById('modalTitle').textContent='Edit Batch';
+                    document.getElementById('batchName').value = b.batchName || '';
+                    document.getElementById('batchYear').value = b.year || '';
+                    openModal();
+                }catch(e){console.error(e)}
+            }
+
+            async function deleteBatch(id){
+                if(!confirm('Delete this batch?')) return;
+                try{
+                    const res = await fetch('/admin/api/batches/'+id, { method:'DELETE' });
+                    if(res.status===204){ loadBatches(); }
+                    else alert('Delete failed');
+                }catch(e){alert('Delete failed')}
+            }
+
+            // initial load
+            loadBatches();
+        </script>
     </main>
 </div>
 </body>

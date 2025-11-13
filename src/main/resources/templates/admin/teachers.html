@@ -7,12 +7,12 @@
     <style>
         body { margin:0; font-family: Arial, sans-serif; background:#f3f4f6 }
         .container { display:flex; min-height:100vh }
-        .sidebar { width:240px; background:linear-gradient(180deg,#0f172a,#0b1220); color:white; padding:24px }
+        .sidebar { width:240px; background:linear-gradient(180deg,#6b46c1); color:white; padding:24px }
         .sidebar .brand { font-size:20px; font-weight:700; margin-bottom:18px }
         .nav { display:flex; flex-direction:column; gap:8px }
         .nav a { display:block; padding:10px 12px; color:#cbd5e1; text-decoration:none; border-radius:6px }
-        .nav a.active { background:#1e293b; color:#fff }
-        .nav a:hover { background:#111827; color:#fff }
+        .nav a.active { background: #C8A9F5; color:#fff }
+        .nav a:hover { background:#A57DE9; color:#fff }
         .content { flex:1; padding:28px }
         .card { background:white; border-radius:8px; padding:20px; box-shadow: 0 2px 6px rgba(0,0,0,0.06) }
     </style>
@@ -31,10 +31,150 @@
         </nav>
     </aside>
     <main class="content">
-        <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px">
             <h2>Teachers</h2>
-            <p>Teacher management area (placeholder).</p>
+            <div>
+                <button id="addTeacherBtn" style="padding:8px 12px; background:#3b82f6; color:white; border:none; border-radius:6px; cursor:pointer">Add Teacher</button>
+            </div>
         </div>
+
+        <div id="teachersList" style="display:flex; flex-direction:column; gap:8px"></div>
+
+        <div id="teacherModal" style="position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,0.4)">
+            <div style="width:520px; background:white; border-radius:8px; padding:18px; box-shadow:0 6px 20px rgba(0,0,0,0.2)">
+                <h3 id="teacherModalTitle">Add Teacher</h3>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px">
+                    <label>Username<input id="t_username" type="text" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px"/></label>
+                    <label>Password<input id="t_password" type="password" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px"/></label>
+                    <label>Full Name<input id="t_fullName" type="text" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px"/></label>
+                    <label>Email<input id="t_email" type="email" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px"/></label>
+                    <label>Phone<input id="t_phone" type="text" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px"/></label>
+                    <label>Batch<select id="t_batch" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px"><option value="">-- None --</option></select></label>
+                    <label style="grid-column:1 / -1">Address<textarea id="t_address" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px"></textarea></label>
+                </div>
+                <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px">
+                    <button id="teacherCancel" style="padding:8px 12px; border-radius:6px; border:1px solid #ddd; background:white">Cancel</button>
+                    <button id="teacherSave" style="padding:8px 12px; background:#10b981; color:white; border:none; border-radius:6px">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            let editingTeacherId = null;
+
+            // helper: always include credentials and detect login redirects
+            async function fetchWithCreds(url, opts){
+                opts = Object.assign({ credentials: 'same-origin' }, opts || {});
+                const res = await fetch(url, opts);
+                const ct = res.headers.get('content-type') || '';
+                // If server returned HTML (login page) instead of JSON, redirect to login
+                if(ct.indexOf('application/json') === -1 && ct.indexOf('text/') === 0){
+                    // probably an HTML login page
+                    window.location = '/login';
+                    throw new Error('Not authenticated');
+                }
+                return res;
+            }
+
+            async function fetchJson(url, opts){
+                const res = await fetchWithCreds(url, opts);
+                return res.json();
+            }
+
+            async function loadTeachers(){
+                try{
+                    const [teachers, batches] = await Promise.all([
+                        fetchJson('/admin/api/teachers'),
+                        fetchJson('/admin/api/batches')
+                    ]);
+                    const list = document.getElementById('teachersList');
+                    const batchSelect = document.getElementById('t_batch');
+                    batchSelect.innerHTML = '<option value="">-- None --</option>' + (batches||[]).map(b=>`<option value="${b.id}">${b.batchName} (${b.year||''})</option>`).join('');
+                    list.innerHTML = '';
+                    (teachers||[]).forEach(t=>{
+                        const el = document.createElement('div'); el.className='card';
+                        const username = t.user? t.user.username : '';
+                        const fullName = t.user? t.user.fullName : '';
+                        el.innerHTML = `
+                            <div style="display:flex; justify-content:space-between; align-items:center">
+                                <div>
+                                    <div style="font-weight:700">${escapeHtml(fullName)} <span style="color:#6b7280; font-size:13px">(${escapeHtml(username)})</span></div>
+                                    <div style="color:#6b7280">Batch: ${t.batch? escapeHtml(t.batch.batchName) : '—' } &nbsp; • &nbsp; ${escapeHtml(t.phone||'')}</div>
+                                </div>
+                                <div style="display:flex; gap:8px">
+                                    <button data-id="${t.id}" class="editTeacher" style="padding:6px 10px; background:#f59e0b; color:white; border:none; border-radius:6px">Edit</button>
+                                    <button data-id="${t.id}" class="delTeacher" style="padding:6px 10px; background:#ef4444; color:white; border:none; border-radius:6px">Delete</button>
+                                </div>
+                            </div>`;
+                        list.appendChild(el);
+                    });
+                    document.querySelectorAll('.editTeacher').forEach(b=>b.addEventListener('click', e=> openTeacherEdit(e.currentTarget.getAttribute('data-id'))));
+                    document.querySelectorAll('.delTeacher').forEach(b=>b.addEventListener('click', e=> deleteTeacher(e.currentTarget.getAttribute('data-id'))));
+                }catch(e){ console.error(e); }
+            }
+
+            function escapeHtml(text){ if(!text) return ''; return text.replace(/[&<>\"']/g, s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[s])); }
+
+            document.getElementById('addTeacherBtn').addEventListener('click', ()=>{
+                editingTeacherId = null; document.getElementById('teacherModalTitle').textContent='Add Teacher';
+                document.getElementById('t_username').value=''; document.getElementById('t_password').value=''; document.getElementById('t_fullName').value=''; document.getElementById('t_email').value=''; document.getElementById('t_phone').value=''; document.getElementById('t_address').value=''; document.getElementById('t_batch').value='';
+                document.getElementById('teacherModal').style.display='flex';
+            });
+            document.getElementById('teacherCancel').addEventListener('click', ()=>document.getElementById('teacherModal').style.display='none');
+
+            document.getElementById('teacherSave').addEventListener('click', async ()=>{
+                const batchVal = document.getElementById('t_batch').value;
+                const payload = {
+                    username: document.getElementById('t_username').value.trim(),
+                    password: document.getElementById('t_password').value,
+                    fullName: document.getElementById('t_fullName').value.trim(),
+                    email: document.getElementById('t_email').value.trim(),
+                    phone: document.getElementById('t_phone').value.trim(),
+                    address: document.getElementById('t_address').value.trim(),
+                    batchId: batchVal ? parseInt(batchVal, 10) : null
+                };
+                try{
+                    if(editingTeacherId){
+                        const res = await fetchWithCreds('/admin/api/teachers/'+editingTeacherId, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+                        if(!res.ok) throw new Error('Update failed');
+                    } else {
+                        if(!payload.username||!payload.password) { alert('username and password required'); return; }
+                        const res = await fetchWithCreds('/admin/api/teachers', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+                        if(!res.ok) { const txt = await res.text(); throw new Error(txt||'Create failed'); }
+                    }
+                    document.getElementById('teacherModal').style.display='none';
+                    loadTeachers();
+                }catch(e){ alert(e.message||'Failed'); }
+            });
+
+            async function openTeacherEdit(id){
+                try{
+                    const list = await fetchJson('/admin/api/teachers');
+                    const t = list.find(x=>String(x.id)===String(id));
+                    if(!t) return alert('Not found');
+                    editingTeacherId = t.id;
+                    document.getElementById('teacherModalTitle').textContent='Edit Teacher';
+                    document.getElementById('t_username').value = t.user? t.user.username : '';
+                    document.getElementById('t_password').value = '';
+                    document.getElementById('t_fullName').value = t.user? t.user.fullName : '';
+                    document.getElementById('t_email').value = t.user? t.user.email : '';
+                    document.getElementById('t_phone').value = t.phone || '';
+                    document.getElementById('t_address').value = t.address || '';
+                    document.getElementById('t_batch').value = t.batch? t.batch.id : '';
+                    document.getElementById('teacherModal').style.display='flex';
+                }catch(e){ console.error(e); }
+            }
+
+            async function deleteTeacher(id){
+                if(!confirm('Delete this teacher?')) return;
+                try{
+                    const res = await fetchWithCreds('/admin/api/teachers/'+id, { method:'DELETE' });
+                    if(res.status===204) loadTeachers(); else alert('Delete failed');
+                }catch(e){ alert('Delete failed') }
+            }
+
+            loadTeachers();
+        </script>
     </main>
 </div>
 </body>

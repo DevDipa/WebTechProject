@@ -10,8 +10,8 @@
         .sidebar .brand { font-size:20px; font-weight:700; margin-bottom:18px }
         .nav { display:flex; flex-direction:column; gap:8px }
         .nav a { display:block; padding:10px 12px; color:#cbd5e1; text-decoration:none; border-radius:6px }
-        .nav a.active { background:rgb(153, 193, 208); color:#fff }
-        .nav a:hover { background:rgb(103, 101, 101); color:#fff }
+        .nav a.active { background:#C8A9F5; color:#fff }
+        .nav a:hover { background:#A57DE9; color:#fff }
         .content { flex:1; padding:28px }
         .card { background:white; border-radius:8px; padding:20px; box-shadow: 0 2px 6px rgba(0,0,0,0.06) }
     </style>
@@ -30,11 +30,74 @@
             <a th:href="@{/logout}">Log Out</a>
         </nav>
     </aside>
+
+    
     <main class="content">
-        <div class="card">
+
+        
+        <div class="card" style="margin-bottom:20px">
             <h2>Welcome, Admin</h2>
             <p>This is the admin dashboard. Use the left menu to navigate.</p>
         </div>
+
+        <div style="display:flex; gap:16px; margin-bottom:18px; flex-wrap:wrap">
+            <div class="card" style="min-width:160px; flex:1 1 160px;">
+                <h3>Total Students</h3>
+                <div id="studentsCount" style="font-size:28px; font-weight:700">0</div>
+            </div>
+            <div class="card" style="min-width:160px; flex:1 1 160px;">
+                <h3>Total Teachers</h3>
+                <div id="teachersCount" style="font-size:28px; font-weight:700">0</div>
+            </div>
+            <div class="card" style="min-width:160px; flex:1 1 160px;">
+                <h3>Total Batches</h3>
+                <div id="batchesCount" style="font-size:28px; font-weight:700">0</div>
+            </div>
+            <div class="card" style="min-width:160px; flex:1 1 160px;">
+                <h3>Holidays</h3>
+                <div id="holidaysCount" style="font-size:28px; font-weight:700">0</div>
+            </div>
+            <div class="card" style="min-width:200px; flex:1 1 200px;">
+                <h3>Attendance Today</h3>
+                <div style="display:flex; gap:12px; align-items:center">
+                    <div>
+                        <div style="font-size:20px">Present</div>
+                        <div id="presentToday" style="font-size:22px; font-weight:700">0</div>
+                    </div>
+                    <div>
+                        <div style="font-size:20px">Absent</div>
+                        <div id="absentToday" style="font-size:22px; font-weight:700">0</div>
+                    </div>
+                    <div>
+                        <div style="font-size:20px">Total</div>
+                        <div id="totalToday" style="font-size:22px; font-weight:700">0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            async function fetchStats(){
+                try{
+                    const res = await fetch('/admin/api/stats');
+                    if(!res.ok) return;
+                    const data = await res.json();
+                    document.getElementById('studentsCount').textContent = data.studentsCount || 0;
+                    document.getElementById('teachersCount').textContent = data.teachersCount || 0;
+                    document.getElementById('batchesCount').textContent = data.batchesCount || 0;
+                    document.getElementById('holidaysCount').textContent = data.holidaysCount || 0;
+                    document.getElementById('presentToday').textContent = data.attendanceTodayPresent || 0;
+                    document.getElementById('absentToday').textContent = data.attendanceTodayAbsent || 0;
+                    document.getElementById('totalToday').textContent = data.attendanceTodayTotal || 0;
+                }catch(e){
+                    console.error('Failed to fetch stats', e);
+                }
+            }
+
+            // initial fetch and poll every 5 seconds
+            fetchStats();
+            setInterval(fetchStats, 5000);
+        </script>
     </main>
 </div>
 </body>

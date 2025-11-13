@@ -7,12 +7,223 @@
     <style>
         body { margin:0; font-family: Arial, sans-serif; background:#f3f4f6 }
         .container { display:flex; min-height:100vh }
-        .sidebar { width:240px; background:linear-gradient(180deg,#0f172a,#0b1220); color:white; padding:24px }
+        .sidebar { width:240px; background:linear-gradient(180deg,#6b46c1); color:white; padding:24px }
         .sidebar .brand { font-size:20px; font-weight:700; margin-bottom:18px }
         .nav { display:flex; flex-direction:column; gap:8px }
         .nav a { display:block; padding:10px 12px; color:#cbd5e1; text-decoration:none; border-radius:6px }
-        .nav a.active { background:#1e293b; color:#fff }
-        .nav a:hover { background:#111827; color:#fff }
+        .nav a.active { background: #C8A9F5; color:#fff }
+        .nav a:hover { background:#A57DE9; color:#fff }
+        .content { flex:1; padding:28px }
+        .card { background:white; border-radius:8px; padding:20px; box-shadow: 0 2px 6px rgba(0,0,0,0.06) }
+    </style>
+</head>
+<body>
+<div class="container">
+    <aside class="sidebar">
+        <div class="brand">SATracker — Admin</div>
+        <nav class="nav">
+            <a th:classappend="${active}=='dashboard'? ' active' : ''" th:href="@{/admin/dashboard}">Dashboard</a>
+            <a th:classappend="${active}=='batches'? ' active' : ''" th:href="@{/admin/batches}">Batches</a>
+            <a th:classappend="${active}=='teachers'? ' active' : ''" th:href="@{/admin/teachers}">Teachers</a>
+            <a th:classappend="${active}=='students'? ' active' : ''" th:href="@{/admin/students}">Students</a>
+            <a th:classappend="${active}=='holidays'? ' active' : ''" th:href="@{/admin/holidays}">Holidays</a>
+            <a th:href="@{/logout}">Log Out</a>
+        </nav>
+    </aside>
+    <main class="content">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px">
+            <h2>Students</h2>
+            <div>
+                <button id="addStudentBtn" style="padding:8px 12px; background:#3b82f6; color:white; border:none; border-radius:6px; cursor:pointer">Add Student</button>
+            </div>
+        </div>
+
+        <div id="studentsList" style="display:flex; flex-direction:column; gap:8px"></div>
+
+        <div id="studentModal" style="position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,0.4)">
+            <div style="width:560px; background:white; border-radius:8px; padding:18px; box-shadow:0 6px 20px rgba(0,0,0,0.2)">
+                <h3 id="studentModalTitle">Add Student</h3>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px">
+                    <label>Username<input id="s_username" type="text" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px"/></label>
+                    <label>Password<input id="s_password" type="password" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px"/></label>
+                    <label>Full Name<input id="s_fullName" type="text" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px"/></label>
+                    <label>Email<input id="s_email" type="email" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px"/></label>
+                    <label>DOB<input id="s_dob" type="date" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px"/></label>
+                    <label>Phone<input id="s_phone" type="text" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px"/></label>
+                    <label>Batch<select id="s_batch" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px"><option value="">-- None --</option></select></label>
+                    <label>Blood Group
+                        <select id="s_bloodGroup" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px">
+                            <option value="">-- Select --</option>
+                            <option value="A+">A+</option>
+                            <option value="A-">A-</option>
+                            <option value="B+">B+</option>
+                            <option value="B-">B-</option>
+                            <option value="AB+">AB+</option>
+                            <option value="AB-">AB-</option>
+                            <option value="O+">O+</option>
+                            <option value="O-">O-</option>
+                        </select>
+                    </label>
+                    <label style="grid-column:1 / -1">Address<textarea id="s_address" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px"></textarea></label>
+                </div>
+                <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px">
+                    <button id="studentCancel" style="padding:8px 12px; border-radius:6px; border:1px solid #ddd; background:white">Cancel</button>
+                    <button id="studentSave" style="padding:8px 12px; background:#10b981; color:white; border:none; border-radius:6px">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            let editingStudentId = null;
+
+            // helper: include credentials and detect login redirects
+            async function fetchWithCreds(url, opts){
+                opts = Object.assign({ credentials: 'same-origin' }, opts || {});
+                const res = await fetch(url, opts);
+                const ct = res.headers.get('content-type') || '';
+                if(ct.indexOf('application/json') === -1 && ct.indexOf('text/') === 0){
+                    window.location = '/login';
+                    throw new Error('Not authenticated');
+                }
+                return res;
+            }
+
+            async function fetchJson(url, opts){
+                const res = await fetchWithCreds(url, opts);
+                return res.json();
+            }
+
+            async function loadStudents(){
+                try{
+                    const [students, batches] = await Promise.all([
+                        fetchJson('/admin/api/students'),
+                        fetchJson('/admin/api/batches')
+                    ]);
+                    const list = document.getElementById('studentsList');
+                    const batchSelect = document.getElementById('s_batch');
+                    // populate batch select; if no batches exist show a small hint with link to create
+                    if(!batches || batches.length===0){
+                        batchSelect.innerHTML = '<option value="">-- None --</option>';
+                        let hint = document.getElementById('batchHint');
+                        if(!hint){
+                            hint = document.createElement('div'); hint.id='batchHint';
+                            hint.style.marginTop = '6px'; hint.style.color='#6b7280'; hint.style.fontSize='13px';
+                            hint.innerHTML = 'No batches found. <a href="/admin/batches">Create a batch</a>.';
+                            batchSelect.parentNode.appendChild(hint);
+                        }
+                    } else {
+                        if(document.getElementById('batchHint')) document.getElementById('batchHint').remove();
+                        batchSelect.innerHTML = '<option value="">-- None --</option>' + (batches||[]).map(b=>`<option value="${b.id}">${b.batchName} (${b.year||''})</option>`).join('');
+                    }
+                    list.innerHTML = '';
+                    (students||[]).forEach(s=>{
+                        const el = document.createElement('div'); el.className='card';
+                        const username = s.user? s.user.username : '';
+                        const fullName = s.user? s.user.fullName : '';
+                        const email = s.user? s.user.email : '';
+                        el.innerHTML = `
+                            <div style="display:flex; justify-content:space-between; align-items:center">
+                                <div>
+                                    <div style="font-weight:700">${escapeHtml(fullName)} <span style="color:#6b7280; font-size:13px">(${escapeHtml(username)})</span></div>
+                                    <div style="color:#6b7280">${escapeHtml(email||'')} &nbsp; • &nbsp; Batch: ${s.batch? escapeHtml(s.batch.batchName) : '—' } &nbsp; • &nbsp; ${escapeHtml(s.phone||'')} ${s.dob? ' • '+escapeHtml(s.dob) : ''}</div>
+                                </div>
+                                <div style="display:flex; gap:8px">
+                                    <button data-id="${s.id}" class="editStudent" style="padding:6px 10px; background:#f59e0b; color:white; border:none; border-radius:6px">Edit</button>
+                                    <button data-id="${s.id}" class="delStudent" style="padding:6px 10px; background:#ef4444; color:white; border:none; border-radius:6px">Delete</button>
+                                </div>
+                            </div>`;
+                        list.appendChild(el);
+                    });
+                    document.querySelectorAll('.editStudent').forEach(b=>b.addEventListener('click', e=> openStudentEdit(e.currentTarget.getAttribute('data-id'))));
+                    document.querySelectorAll('.delStudent').forEach(b=>b.addEventListener('click', e=> deleteStudent(e.currentTarget.getAttribute('data-id'))));
+                }catch(e){ console.error(e); }
+            }
+
+            function escapeHtml(text){ if(!text) return ''; return text.replace(/[&<>"']/g, s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[s])); }
+
+            document.getElementById('addStudentBtn').addEventListener('click', ()=>{
+                editingStudentId = null; document.getElementById('studentModalTitle').textContent='Add Student';
+                document.getElementById('s_username').value=''; document.getElementById('s_password').value=''; document.getElementById('s_fullName').value=''; document.getElementById('s_email').value=''; document.getElementById('s_dob').value=''; document.getElementById('s_phone').value=''; document.getElementById('s_address').value=''; document.getElementById('s_bloodGroup').value=''; document.getElementById('s_batch').value='';
+                document.getElementById('studentModal').style.display='flex';
+            });
+            document.getElementById('studentCancel').addEventListener('click', ()=>document.getElementById('studentModal').style.display='none');
+
+            document.getElementById('studentSave').addEventListener('click', async ()=>{
+                const batchVal = document.getElementById('s_batch').value;
+                const payload = {
+                    username: document.getElementById('s_username').value.trim(),
+                    password: document.getElementById('s_password').value,
+                    fullName: document.getElementById('s_fullName').value.trim(),
+                    email: document.getElementById('s_email').value.trim(),
+                    dob: document.getElementById('s_dob').value || null,
+                    phone: document.getElementById('s_phone').value.trim(),
+                    address: document.getElementById('s_address').value.trim(),
+                    bloodGroup: document.getElementById('s_bloodGroup').value.trim(),
+                    batchId: batchVal ? parseInt(batchVal, 10) : null
+                };
+                try{
+                    if(editingStudentId){
+                        const res = await fetchWithCreds('/admin/api/students/'+editingStudentId, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+                        if(!res.ok) throw new Error('Update failed');
+                    } else {
+                        if(!payload.username||!payload.password) { alert('username and password required'); return; }
+                        const res = await fetchWithCreds('/admin/api/students', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+                        if(!res.ok) { const txt = await res.text(); throw new Error(txt||'Create failed'); }
+                    }
+                    document.getElementById('studentModal').style.display='none';
+                    loadStudents();
+                }catch(e){ alert(e.message||'Failed'); }
+            });
+
+            async function openStudentEdit(id){
+                try{
+                    const list = await fetchJson('/admin/api/students');
+                    const s = list.find(x=>String(x.id)===String(id));
+                    if(!s) return alert('Not found');
+                    editingStudentId = s.id;
+                    document.getElementById('studentModalTitle').textContent='Edit Student';
+                    document.getElementById('s_username').value = s.user? s.user.username : '';
+                    document.getElementById('s_password').value = '';
+                    document.getElementById('s_fullName').value = s.user? s.user.fullName : '';
+                    document.getElementById('s_email').value = s.user? s.user.email : '';
+                    document.getElementById('s_dob').value = s.dob || '';
+                    document.getElementById('s_phone').value = s.phone || '';
+                    document.getElementById('s_address').value = s.address || '';
+                    document.getElementById('s_bloodGroup').value = s.bloodGroup || '';
+                    document.getElementById('s_batch').value = s.batch? s.batch.id : '';
+                    document.getElementById('studentModal').style.display='flex';
+                }catch(e){ console.error(e); }
+            }
+
+            async function deleteStudent(id){
+                if(!confirm('Delete this student?')) return;
+                try{
+                    const res = await fetchWithCreds('/admin/api/students/'+id, { method:'DELETE' });
+                    if(res.status===204) loadStudents(); else alert('Delete failed');
+                }catch(e){ alert('Delete failed') }
+            }
+
+            loadStudents();
+        </script>
+    </main>
+</div>
+</body>
+</html>
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8" />
+    <title>Students - Admin</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+        body { margin:0; font-family: Arial, sans-serif; background:#f3f4f6 }
+        .container { display:flex; min-height:100vh }
+        .sidebar { width:240px; background:linear-gradient(180deg,#6b46c1); color:white; padding:24px }
+        .sidebar .brand { font-size:20px; font-weight:700; margin-bottom:18px }
+        .nav { display:flex; flex-direction:column; gap:8px }
+        .nav a { display:block; padding:10px 12px; color:#cbd5e1; text-decoration:none; border-radius:6px }
+        .nav a.active { background:#C8A9F5; color:#fff }
+        .nav a:hover { background:#A57DE9; color:#fff }
         .content { flex:1; padding:28px }
         .card { background:white; border-radius:8px; padding:20px; box-shadow: 0 2px 6px rgba(0,0,0,0.06) }
     </style>

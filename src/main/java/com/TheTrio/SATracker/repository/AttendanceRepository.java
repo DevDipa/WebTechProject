@@ -1,6 +1,12 @@
 package com.TheTrio.SATracker.repository;
 
-import com.TheTrio.SATracker.models.*;
+import com.TheTrio.SATracker.models.Attendance;
+import com.TheTrio.SATracker.models.AttendanceStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface AttendanceRepository extends JpaRepository<Attendance, Integer> {}
+import java.time.LocalDate;
+
+public interface AttendanceRepository extends JpaRepository<Attendance, Integer> {
+	long countByDate(LocalDate date);
+	long countByDateAndStatus(LocalDate date, AttendanceStatus status);
+}

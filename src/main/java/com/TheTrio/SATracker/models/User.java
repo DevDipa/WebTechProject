@@ -2,6 +2,7 @@ package com.TheTrio.SATracker.models;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "users")
@@ -15,6 +16,7 @@ public class User {
     private String username;
 
     @Column(nullable = false, length = 255)
+    @JsonIgnore
     private String password;
 
     @Enumerated(EnumType.STRING)
