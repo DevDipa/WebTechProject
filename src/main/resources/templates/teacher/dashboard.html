@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8" />
+    <title>Teacher Dashboard</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+        body { margin:0; font-family: Arial, sans-serif; background:#f3f4f6 }
+        .container { display:flex; min-height:100vh }
+        .sidebar { width:220px; background:linear-gradient(180deg,#6b46c1); color:white; padding:20px }
+        .sidebar .brand { font-size:20px; font-weight:700; margin-bottom:18px }
+        .nav { display:flex; flex-direction:column; gap:8px }
+        .nav a { display:block; padding:10px 12px; color:#cbd5e1; text-decoration:none; border-radius:6px }
+        .nav a.active { background:#C8A9F5; color:#fff }
+        .nav a:hover { background:#A57DE9; color:#fff }
+        .content { flex:1; padding:28px }
+        .card { background:white; border-radius:8px; padding:20px; box-shadow: 0 2px 6px rgba(0,0,0,0.06) }
+        .row { display:flex; gap:12px }
+        .stat { flex:1; padding:18px; border-radius:8px; background:#fff; box-shadow:0 2px 6px rgba(0,0,0,0.04); }
+    </style>
+</head>
+<body>
+<div class="container">
+    <aside class="sidebar">
+        <div class="brand">SATracker — Teacher</div>
+        
+         <nav class="nav">
+            <a th:classappend="${active}=='dashboard'? ' active' : ''" th:href="@{/teacher/dashboard}">Dashboard</a>
+            <a th:classappend="${active}=='batches'? ' active' : ''" th:href="@{/teacher/attendance}">Attendance</a>
+            <a th:href="@{/logout}">Log Out</a>
+        </nav>
+    </aside>
+    <main class="content">
+
+        <div class="card">
+            <h2 id="welcome">Welcome</h2>
+            <p id="summaryText">Summary for your assigned batch</p>
+        </div>
+
+            <div class="row" style="margin-top:25px">
+                <div class="stat card">
+                    <div style="font-size:20px; color:black"><h3>Students</h3> </div>
+                    <div id="totalStudents" style="font-size:28px; font-weight:700">0</div>
+                </div>
+                <div class="stat card">
+                    <div style="font-size:20px; color:black"><h3>Holidays</h3></div>
+                    <div id="totalHolidays" style="font-size:28px; font-weight:700">0</div>
+                </div>
+                <div class="stat card">
+                    <div style="font-size:20px; color:black"><h3>Attendance Today</h3></div>
+                    <div id="attendanceToday" style="font-size:28px; font-weight:700">0</div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+    document.getElementById('btnAttendance').addEventListener('click', ()=> window.location='/teacher/attendance');
+
+    async function loadSummary(){
+        try{
+            const res = await fetch('/teacher/api/summary', { credentials: 'same-origin' });
+            if(!res.ok) throw new Error('failed');
+            const data = await res.json();
+            document.getElementById('welcome').textContent = `Welcome, ${data.teacherName || 'Teacher'}`;
+            document.getElementById('totalStudents').textContent = data.totalStudents || 0;
+            document.getElementById('totalHolidays').textContent = data.totalHolidays || 0;
+            document.getElementById('attendanceToday').textContent = data.attendanceToday || 0;
+        }catch(e){ console.error(e); }
+    }
+    loadSummary();
+</script>
+</body>
+</html>

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8" />
+    <title>Teacher Attendance</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+        body { margin:0; font-family: Arial, sans-serif; background:#f3f4f6 }
+        .container { display:flex; min-height:100vh }
+        .sidebar { width:220px; background:linear-gradient(180deg,#6b46c1); color:white; padding:20px }
+        .sidebar .brand { font-size:18px; font-weight:700; margin-bottom:12px }
+        .nav { display:flex; flex-direction:column; gap:8px }
+        .nav a { display:block; padding:10px 12px; color:#cbd5e1; text-decoration:none; border-radius:6px }
+        .nav a.active { background:#C8A9F5; color:#fff }
+        .nav a:hover { background:#A57DE9; color:#fff }
+        .content { flex:1; padding:24px }
+        .card { background:white; border-radius:8px; padding:20px; box-shadow: 0 2px 6px rgba(0,0,0,0.06) }
+        .student-row { display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid #f1f5f9 }
+        .controls { display:flex; gap:8px }
+    </style>
+</head>
+<body>
+<div class="container">
+    <aside class="sidebar">
+        <div class="brand">SATracker — Teacher</div>
+        
+         <nav class="nav">
+            <a th:classappend="${active}=='dashboard'? ' active' : ''" th:href="@{/teacher/dashboard}">Dashboard</a>
+            <a th:classappend="${active}=='batches'? ' active' : ''" th:href="@{/teacher/attendance}">Attendance</a>
+            <a th:href="@{/logout}">Log Out</a>
+        </nav>
+    </aside>
+    <main class="content">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px">
+            <h2>Attendance</h2>
+            <div style="display:flex; gap:8px; align-items:center">
+                <input id="datePicker" type="date" />
+                <button id="checkBtn" style="padding:8px 12px;">Load</button>
+                <button id="saveBtn" style="padding:8px 12px; background:#10b981; color:white; border:none; border-radius:6px">Save</button>
+            </div>
+        </div>
+
+        <div id="message" style="color:#b91c1c; margin-bottom:8px"></div>
+
+        <div id="listCard" class="card">
+            <div style="font-weight:700; color:#6b7280; padding-bottom:8px">Students</div>
+            <div id="studentsList"></div>
+        </div>
+    </main>
+</div>
+
+<script>
+    document.getElementById('btnDashboard').addEventListener('click', ()=> window.location='/teacher/dashboard');
+
+    let students = [];
+
+    async function loadStudents(){
+        try{
+            const res = await fetch('/teacher/api/students', { credentials: 'same-origin' });
+            if(!res.ok) throw new Error('failed');
+            students = await res.json();
+            renderStudents([]);
+        }catch(e){ console.error(e); }
+    }
+
+    function renderStudents(records){
+        const list = document.getElementById('studentsList');
+        list.innerHTML = '';
+        (students||[]).forEach(s=>{
+            const div = document.createElement('div'); div.className='student-row';
+            const left = document.createElement('div'); left.innerHTML = `<div style="font-weight:700">${escapeHtml(s.user? s.user.fullName : '')}</div><div style="color:#6b7280; font-size:13px">ID: ${s.id}</div>`;
+            const controls = document.createElement('div'); controls.className='controls';
+            const pBtn = document.createElement('button'); pBtn.textContent='Present';
+            const aBtn = document.createElement('button'); aBtn.textContent='Absent';
+            const lBtn = document.createElement('button'); lBtn.textContent='Late';
+            [pBtn,aBtn,lBtn].forEach(b=>{ b.style.padding='6px 10px'; b.style.borderRadius='6px'; b.style.border='1px solid #ddd'; b.addEventListener('click', ()=> setStatus(s.id, b.textContent.toUpperCase())); });
+            const statusLabel = document.createElement('div'); statusLabel.id = 'status-'+s.id; statusLabel.style.minWidth='90px'; statusLabel.style.textAlign='center'; statusLabel.textContent='—';
+            controls.appendChild(pBtn); controls.appendChild(aBtn); controls.appendChild(lBtn); controls.appendChild(statusLabel);
+            div.appendChild(left); div.appendChild(controls);
+            list.appendChild(div);
+        });
+    }
+
+    function setStatus(studentId, status){
+        const el = document.getElementById('status-'+studentId);
+        if(el) el.textContent = status;
+    }
+
+    function escapeHtml(text){ if(!text) return ''; return text.replace(/[&<>\"']/g, s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[s])); }
+
+    document.getElementById('checkBtn').addEventListener('click', async ()=>{
+        const d = document.getElementById('datePicker').value;
+        if(!d) return alert('Pick a date');
+        // check holiday/saturday/future
+        const res = await fetch(`/teacher/api/isHoliday?date=${d}`, { credentials: 'same-origin' });
+        const info = await res.json();
+        const msg = document.getElementById('message');
+        if(info.isFuture){ msg.textContent='Cannot mark attendance for future dates.'; return; }
+        if(info.isSaturday){ msg.textContent='Saturdays are holidays; marking disabled.'; return; }
+        if(info.isHoliday){ msg.textContent='This date is a registered holiday; marking disabled.'; return; }
+        msg.textContent = '';
+        // load existing attendance for this date (optional) - backend saves/updates on Save
+        renderStudents([]);
+    });
+
+    document.getElementById('saveBtn').addEventListener('click', async ()=>{
+        const d = document.getElementById('datePicker').value;
+        if(!d) return alert('Pick a date');
+        const resInfo = await fetch(`/teacher/api/isHoliday?date=${d}`, { credentials: 'same-origin' });
+        const info = await resInfo.json();
+        const msg = document.getElementById('message');
+        if(info.isFuture || info.isSaturday || info.isHoliday){ msg.textContent='Selected date is not allowed for marking.'; return; }
+        // build records
+        const records = students.map(s=>({ studentId: s.id, status: (document.getElementById('status-'+s.id)?.textContent || 'ABSENT') }));
+        try{
+            const res = await fetch('/teacher/api/attendance', { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ date: d, records }) });
+            const data = await res.json();
+            if(data.error) { msg.textContent = data.error; return; }
+            msg.style.color = '#065f46'; msg.textContent = `Saved ${data.saved || 0} records`;
+        }catch(e){ console.error(e); msg.textContent='Save failed'; }
+    });
+
+    loadStudents();
+</script>
+</body>
+</html>
